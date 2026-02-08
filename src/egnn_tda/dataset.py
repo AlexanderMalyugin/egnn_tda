@@ -104,14 +104,12 @@ class Add_node_attrs:
         self.y_index = self.PROPERTIES[target_y]
 
     def __call__(self, data: Data) -> Data:
-        # x expected shape: [N, F]
         x = data.x
         if x is None or x.dim() != 2:
             raise ValueError(f"Expected data.x to be 2D [N,F], got {None if x is None else tuple(x.shape)}")
 
         F = x.size(1)
 
-        # resolve negative indices like -1
         idx = []
         for i in self.node_attr_indices:
             ii = i if i >= 0 else F + i
@@ -120,9 +118,8 @@ class Add_node_attrs:
             idx.append(ii)
 
         idx_t = torch.tensor(idx, dtype=torch.long)
-        data.node_attr = x.index_select(1, idx_t)     # [N, len(idx)]
+        data.node_attr = x.index_select(1, idx_t)
 
-        # QM9: data.y is typically shape [19] (or [1,19] depending on version)
         y = data.y
         if y is None:
             return data
@@ -133,7 +130,7 @@ class Add_node_attrs:
         if y.dim() != 1:
             raise ValueError(f"Expected data.y to be 1D [T], got {tuple(y.shape)}")
 
-        data.y = y[self.y_index].view(1)             # -> [1]
+        data.y = y[self.y_index].view(1)
 
         return data
 
