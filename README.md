@@ -1,91 +1,175 @@
-EGNN+TDA
+# EGNN + TDA
 
 Stepik: 187053348
 
-# Введение
+# Introduction
 
-Работа представляет собой выпускной проект в рамках курса "Deep Learning School. Часть 1" направления "Geometric ML".
-Целью данной работы является построение модели на базе архитектуры EGNN с использованием признаков из Topological Data Analysis.
-В исследовании используется набор данных QM9 с целевой переменной равной разницe HOMO и LUMO (далее `gap`).
+This work is a final project within the course *"Deep Learning School. Part 1"* in the *Geometric ML* track.
 
-# Набор данных
+The goal of this project is to build a model based on the EGNN architecture using features derived from Topological Data Analysis (TDA).
 
-Для работы с данными в `dataset.py` реализованы несколько трансформеров, позволяющих следующее:
+The QM9 dataset is used in this study, with the target variable defined as the difference between HOMO and LUMO energy levels (hereafter referred to as `gap`).
 
-* уменьшить размер датасета с фильтром максимального числа атомов в молекуле (`MaxAtomsFilter`);
-* извлечь целевую переменную и изменить число интересующих признаков (`Add_node_attrs`);
-* удалить ненужные аттрибуты датасета (`DropFields`);
-* строить диаграммы персистентности и организовывать на их основе (с помощью размывания) изображения персистентности (PI) (`TDA_transform`).
+---
 
-Новый датасет имеет два новых аттрибута: node_attr, куда собраны все рассматриваемые признаки узлов, и pi, которые представляют собой трехканальные массивы из H0 (связные компоненты) и H1 (кольца и петли).
+# Dataset
 
-Признак заряда атома был исключен из рассмотрения, поскольку эта информация дублируется в аттрибуте x, то есть дублируется.
-Итого, в node_attr содержатся признаки: H?, C?, N?, O?, F?, заряд атома, ароматичность?, sp?, sp2?, sp3?, число атомов водорода, связанных с атомом.
-Знаком ? указаны качественные признаки.
+Several data transformers are implemented in `dataset.py`, providing the following functionality:
 
-# Модель
+- reducing the dataset size using a filter on the maximum number of atoms in a molecule (`MaxAtomsFilter`);
+- extracting the target variable and modifying the number of node features (`Add_node_attrs`);
+- removing unnecessary dataset attributes (`DropFields`);
+- constructing persistence diagrams and converting them into persistence images (PI) via smoothing (`TDA_transform`).
 
-В проекте реализована упрощенная версия архитектуры EGNN, представленная в статье https://arxiv.org/abs/2102.09844 .
-Данная модель основывается на E(3) Equivariant Graph Convolution Layer (EGCL), который в данной работе реализован на основе класса `torch_geometrcic.nn.MessagePassing`.
-Реализованный класс `GCL` принимает на вход количество скрытых признаков `hidden_dim` (в данной работе равен 64) и флаг `equivariant`, позволяющая работать как с инвариантной моделью, так и с эквивариантной.
-В рамках изложенной задачи допускается работать с инвариантной моделью (`equivariant = False`), поскольку авторы статьи не отметили никаких улучшений.
-Соотвественно, в проекте используется инвариантная модель. Для `MessagePassing` переписаны функции `message` и `aggregate` (в соответствии со статьей), а также сама функци `forward`.
-Удобство использования `MessagePassing` класса заключается в том, что наследуемые функции позволяют легко реорганизовать входы из `forward` (`h, x, edge_index, edge_attr`) в последующую цепочку вызовов `propogate`.
+The resulting dataset contains two additional attributes:
 
-Представлены два варианта моделей - `EGNN` и `EGNN_TDA`, последняя из которых использует PI.
-Обе модели начинаются с эмбеддинга аттрибутов узлов и ребер графа. Далее графы проходят через несколько `GCL` (в данной работе их было 7).
-И на выходе несколько линейных слоев, затем пулинг и несколько дополнительных линейных слоев, предсказывающих целевую переменную.
-Разница моделей заключается в том, что после пулинга в моделе с TDA имеется конволюционный слой с последующей активацией.
-Далее эти признаки проходят через линейный слой и конкатенируются с выходом из пулинга.
-Затем аналогичным образом предсказывается целевая переменная. Таким образом, PI используется как глобальный признак.
+- `node_attr`: a collection of all node features;
+- `pi`: three-channel arrays corresponding to H0 (connected components) and H1 (cycles/loops).
 
-Иллюстрация H0 и H1 для некотором конфигурации представлена ниже.
+The atomic charge feature was excluded since it duplicates information already present in the attribute `x`.
+
+Thus, `node_attr` includes the following features:
+- H?, C?, N?, O?, F? (categorical indicators),
+- atomic charge,
+- aromaticity,
+- hybridization states (sp, sp2, sp3),
+- number of bonded hydrogen atoms.
+
+The symbol “?” denotes categorical features.
+
+---
+
+# Model
+
+A simplified version of the EGNN architecture from the paper  
+https://arxiv.org/abs/2102.09844 is implemented in this project.
+
+The model is based on the E(3)-Equivariant Graph Convolution Layer (EGCL), implemented using the `torch_geometric.nn.MessagePassing` class.
+
+The custom `GCL` class takes:
+- `hidden_dim` (set to 64 in this work),
+- an `equivariant` flag, allowing either invariant or equivariant operation.
+
+For the current task, the invariant version (`equivariant = False`) is sufficient, as no improvement from equivariance was reported in the original paper. Therefore, the invariant model is used.
+
+Within `MessagePassing`, the `message`, `aggregate`, and `forward` functions are redefined according to the paper.
+
+A key advantage of `MessagePassing` is that it automatically restructures inputs from `forward` (`h, x, edge_index, edge_attr`) into the propagation pipeline.
+
+---
+
+Two model variants are implemented:
+
+- `EGNN`
+- `EGNN_TDA` (with persistence images)
+
+Both models:
+1. start with embedding node and edge attributes,
+2. pass data through multiple `GCL` layers (7 in this work),
+3. apply several linear layers,
+4. perform pooling,
+5. and finalize predictions with additional linear layers.
+
+The difference:
+
+- In `EGNN_TDA`, after pooling:
+  - a convolutional layer is applied to the persistence image,
+  - followed by activation,
+  - then a linear layer,
+  - and concatenation with pooled graph features.
+
+Thus, persistence images are used as **global descriptors**.
+
+An illustration of H0 and H1 for a sample configuration is shown below:
 
 <img src="figs/pi.png" width="800">
 
-# Обучение и валидация
+---
 
-Обучение проводилось на полном датасете QM9, со следующими аттрибутами узлов: H?, C?, N?, O?, F?, ароматичность?, sp?, sp2?, sp3?, число атомов водорода, связанных с атомом.
-Тренировочная выборка составляла 90%, в то время как валидационная - 10%. Оптимальный размер батча - 64, так как при увеличении растет переобучение. Пример обучения представлен в `notebook/egnn_tda_train.ipynb`. 
-В работе использована среднеквадратичная функция ошибок. Оптимальная модель выбиралась по минимуму ошибки на валидационной выборке.
+# Training and Validation
 
-Для оптимизации обучения целевая переменная представлась как разница между текущем значением и средним по тренировочному датасету. То есть для получения значения `gap` нужно к выводу модели добавить среднее.
-В папке `checkpoints` имееются обученные модели. Можно загружать следующим образом:
+Training was performed on the full QM9 dataset using the following node features:
 
-```commandline
-ckpt = torch.load("checkpoints/egnn_qm9_gap.pt", map_location="cpu")
-model.load_state_dict(ckpt["model_state"])
-y_mean = ckpt["mean_y"]
-```
+H?, C?, N?, O?, F?, aromaticity, sp, sp2, sp3, number of bonded hydrogens.
 
-# Результаты
+- Training set: 90%
+- Validation set: 10%
+- Optimal batch size: 64 (larger batches increase overfitting)
 
-В оригинальной статье отмечается, что средняя абсолютная ошибка составляет 48 meV, поэтому далее используется именно эта характеристика.
+An example training pipeline is provided in:
+`notebook/egnn_tda_train.ipynb`
 
-Ниже представлены графики, иллюстрирующие точность обученных моделей `EGNN` и ниже `EGNN_TDA`. Синим цветом указаны точки обучающей выборки и поверх них лежат зеленые точки валидационной выборки.
+The loss function used is Mean Squared Error (MSE).
+
+The best model is selected based on minimum validation loss.
+
+---
+
+### Target normalization
+
+To improve training stability, the target is normalized as:
+
+y_train = y - y_mean
+
+Thus, to recover the true `gap`, the dataset mean must be added back to the model output.
+
+---
+
+### Loading pretrained models
+
+Pretrained models are available in the `checkpoints` directory:
+
+    ckpt = torch.load("checkpoints/egnn_qm9_gap.pt", map_location="cpu")
+    model.load_state_dict(ckpt["model_state"])
+    y_mean = ckpt["mean_y"]
+
+---
+
+# Results
+
+The original paper reports a mean absolute error (MAE) of **48 meV**, which is used here as a reference.
+
+### EGNN
 
 <img src="figs/egnn_acc.png" width="600">
 
-MAE (train): 91.49 meV
+- MAE (train): 91.49 meV  
+- MAE (valid): 90.03 meV  
 
-MAE (valid): 90.03 meV
+---
+
+### EGNN_TDA
 
 <img src="figs/egnn_tda_acc.png" width="600">
 
-MAE (train): 71.71 meV
+- MAE (train): 71.71 meV  
+- MAE (valid): 97.77 meV  
 
-MAE (valid): 97.77 meV
+---
 
-Локальные выпады синих точек тренировочной выборки могут быть легко устранены переобученной моделью. Однако, она не представляет практической ценности.
-Простая модель EGNN показывает несколько лучший результат, поскольку дает несколько меньшую ошибку на валидационной выборке. Также интересно, что большинство точек валидационной выборки лежат внутри дисперсии данных предсказанных для тренировочной выборки.
-Несколько более сложное поведение характерно для EGNN_TDA модели, поскольку, по всей видимости, конволюционный слой вносит сложности в обучение, основываясь на среднеквадратичной ошибке.
-Полагалось, что PI сможет внести некоторую поправку, обусловленную особенностями глобальной структуры молекулы.
-Наверное, более удачным случаем будет анализ PI, где дисперсия задается не вручную через Гауссово размытие, а путем анализа гораздо более массивных структур с большим разнообразием H0 и H1. Также интересно добавление H2.
-Однако, в целом результаты довольно близки.
+### Discussion
 
-# Установка среды
+Local deviations (outliers) in the training set can be easily reduced by overfitting, but such models have no practical value.
 
-``` 
-conda env create -f environment.yml
-conda activate egnn_tda
-```
+The simpler EGNN model performs slightly better due to lower validation error.
+
+Notably, most validation points lie within the variance of predictions obtained for the training set.
+
+The behavior of the EGNN_TDA model is more complex. Most likely, the convolutional layer introduces additional optimization difficulty under the MSE loss.
+
+It was expected that persistence images would provide corrections related to global molecular structure.
+
+More promising results may be obtained by:
+
+- using larger and more diverse molecular systems,
+- avoiding manually fixed Gaussian smoothing,
+- incorporating higher-order features such as H2.
+
+Overall, however, the results of both models are comparable.
+
+---
+
+# Environment Setup
+
+    conda env create -f environment.yml
+    conda activate egnn_tda
